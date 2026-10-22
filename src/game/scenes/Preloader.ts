@@ -30,15 +30,28 @@ export class Preloader extends Scene
     preload ()
     {
         //  Load the assets for the game - Replace with your own assets
-        this.load.setPath('assets');
+        this.load.setPath('assets');        
 
-        this.load.image('logo', 'logo.png');
+        // Tako se uporabi spriteSheet (mouse-click je ime, drugo je pa path do spritesheeta,
+        //                              spodaj pa še podaš kok pikslov je za en sprite)
+        this.load.spritesheet('mouse-click', 'Keyboard&Mouse/mouse/mouse_animation.png',{
+            frameWidth: 16,
+            frameHeight: 16
+        });
     }
 
     create ()
     {
         //  When all the assets have loaded, it's often worth creating global objects here that the rest of the game can use.
         //  For example, you can define global animations here, so we can use them in other scenes.
+
+        // Tako naredis animacijo
+        this.anims.create({
+            key: 'mouse-click-anim', // ime
+            frames: this.anims.generateFrameNumbers('mouse-click', { start: 4, end:7}), // kateri spritesheet, od kod do kod
+            frameRate: 6,
+            repeat: -1 // -1
+        });
 
         //  Move to the MainMenu. You could also swap this for a Scene Transition, such as a camera fade.
         this.scene.start('MainMenu');
