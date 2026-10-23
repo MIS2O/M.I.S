@@ -15,6 +15,13 @@ const config: Phaser.Types.Core.GameConfig = {
     backgroundColor: '#028af8',
     pixelArt: true,
     roundPixels: true,
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { x: 0, y: 0 },
+            debug: false // Samo za test pol v game izklopi
+        }
+    },
     scene: [
         Boot,
         Preloader,

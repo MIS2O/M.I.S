@@ -1,14 +1,11 @@
 import { Scene } from 'phaser';
 
-export class Preloader extends Scene
-{
-    constructor ()
-    {
+export class Preloader extends Scene {
+    constructor() {
         super('Preloader');
     }
 
-    init ()
-    {
+    init() {
         //  We loaded this image in our Boot Scene, so we can display it here
         this.add.image(512, 384, 'background');
 
@@ -16,7 +13,7 @@ export class Preloader extends Scene
         this.add.rectangle(512, 384, 468, 32).setStrokeStyle(1, 0xffffff);
 
         //  This is the progress bar itself. It will increase in size from the left based on the % of progress.
-        const bar = this.add.rectangle(512-230, 384, 4, 28, 0xffffff);
+        const bar = this.add.rectangle(512 - 230, 384, 4, 28, 0xffffff);
 
         //  Use the 'progress' event emitted by the LoaderPlugin to update the loading bar
         this.load.on('progress', (progress: number) => {
@@ -27,33 +24,51 @@ export class Preloader extends Scene
         });
     }
 
-    preload ()
-    {
+    preload() {
         //  Load the assets for the game - Replace with your own assets
-        this.load.setPath('assets');        
+        this.load.setPath('assets');
 
         // Tako se uporabi spriteSheet (mouse-click je ime, drugo je pa path do spritesheeta,
         //                              spodaj pa še podaš kok pikslov je za en sprite)
-        this.load.spritesheet('mouse-click', 'Keyboard&Mouse/mouse/mouse_animation.png',{
+        this.load.spritesheet('mouse-click', 'Keyboard&Mouse/mouse/mouse_animation.png', {
             frameWidth: 16,
             frameHeight: 16
         });
+
+        this.load.image(
+            'room-tiles',
+            'Furtniture_Spritesheets/Spritesheets/floor&walls_spritesheet.png'
+        );
+
+        this.load.image(
+            'decoration',
+            'Furtniture_Spritesheets/Spritesheets/UsableDecoration.png'
+        )
+
+        this.load.image('mouse', 'Mouse/mouse_topdown_32x32.png');
+
+        // Naloži vse sobe
+        this.loadRooms();
+
     }
 
-    create ()
-    {
+    create() {
         //  When all the assets have loaded, it's often worth creating global objects here that the rest of the game can use.
         //  For example, you can define global animations here, so we can use them in other scenes.
 
         // Tako naredis animacijo
         this.anims.create({
             key: 'mouse-click-anim', // ime
-            frames: this.anims.generateFrameNumbers('mouse-click', { start: 4, end:7}), // kateri spritesheet, od kod do kod
+            frames: this.anims.generateFrameNumbers('mouse-click', { start: 4, end: 7 }), // kateri spritesheet, od kod do kod
             frameRate: 6,
             repeat: -1 // -1
         });
 
-        //  Move to the MainMenu. You could also swap this for a Scene Transition, such as a camera fade.
         this.scene.start('MainMenu');
+    }
+
+    loadRooms() {
+        this.load.tilemapTiledJSON('Feri_Logo_Room', 'Rooms/FeriLogoRoom.json');
+        this.load.tilemapTiledJSON('Start_Room', 'Rooms/StartRoom.json');
     }
 }
