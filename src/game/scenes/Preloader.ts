@@ -47,6 +47,21 @@ export class Preloader extends Scene {
 
         this.load.image('mouse', 'Mouse/mouse_topdown_32x32.png');
 
+        // TineGames
+        this.load.tilemapTiledJSON('map', 'TineGames/map.tmj');
+        this.load.image('I_32', 'TineGames/Texture/I_32.png');
+        this.load.image('V_32', 'TineGames/Texture/V_32.png');
+        this.load.image('X_32', 'TineGames/Texture/X_32.png');
+        this.load.image('TX Tileset Wall', 'TineGames/Texture/TX Tileset Wall.png');
+        this.load.image('TX Tileset Grass', 'TineGames/Texture/TX Tileset Grass.png');
+        this.load.image('TX Plant', 'TineGames/Texture/TX Plant.png');
+        this.load.image('TX Struct', 'TineGames/Texture/TX Struct.png');
+        this.load.spritesheet('TX Props', 'TineGames/Texture/TX Props.png', {
+            frameWidth: 32,
+            frameHeight: 32
+        });
+        this.load.image('TX Struct 2', 'TineGames/Texture/TX Struct Sideways.png');
+
         // Naloži vse sobe
         this.loadRooms();
 
