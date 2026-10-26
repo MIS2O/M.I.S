@@ -5,6 +5,7 @@ import { MainMenu } from './scenes/MainMenu';
 import { AUTO, Game } from 'phaser';
 import { Preloader } from './scenes/Preloader';
 import { SkrivnePretvorbe } from './scenes/SkrivnePretvorbe';
+import { SirastiKoti } from './scenes/SirastiKoti';
 
 //  Find out more information about the Game Config at:
 //  https://docs.phaser.io/api-documentation/typedef/types-core#gameconfig
@@ -29,7 +30,8 @@ const config: Phaser.Types.Core.GameConfig = {
         MainMenu,
         MainGame,
         GameOver,
-        SkrivnePretvorbe
+        SkrivnePretvorbe,
+        SirastiKoti
     ]
 };
 
