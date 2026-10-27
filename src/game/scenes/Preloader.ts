@@ -79,7 +79,9 @@ export class Preloader extends Scene {
             repeat: -1 // -1
         });
 
-        this.scene.start('MainMenu');
+        //http://localhost:8081/?scene=SirnaTehtnica
+        const testScene = new URLSearchParams(window.location.search).get('scene');
+        this.scene.start(testScene && this.scene.get(testScene) ? testScene : 'MainMenu');
     }
 
     loadRooms() {
