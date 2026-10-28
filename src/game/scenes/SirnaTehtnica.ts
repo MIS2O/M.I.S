@@ -2,8 +2,8 @@ import * as Phaser from 'phaser';
 import { Scene } from 'phaser';
 /// definicija nivojev, tipov krogov in številskih vrst
 type Level = 1 | 2;
-type RoundType = 'tehtnica' | 'poltrak' | 'enakovredni' | 'urejanje';
-type NumKind = 'ulomek' | 'mesano' | 'decimalno' | 'naravno';
+type RoundType = 'tehtnica' | 'enakovredni';
+type NumKind = 'ulomek' | 'mesano' | 'decimalno';
 
 /// število shranimo kot ulomek p/q, da lahko vse vrste primerjamo med sabo
 interface Num {
@@ -16,22 +16,30 @@ interface Num {
 }
 
 const ROUNDS: Record<Level, RoundType[]> = {
-    1: ['tehtnica', 'poltrak', 'tehtnica', 'poltrak', 'tehtnica', 'poltrak', 'tehtnica', 'poltrak'],
-    2: ['enakovredni', 'tehtnica', 'poltrak', 'urejanje', 'enakovredni', 'tehtnica', 'poltrak', 'urejanje']
+    1: ['tehtnica', 'tehtnica', 'tehtnica', 'tehtnica', 'tehtnica', 'tehtnica'],
+    2: ['enakovredni', 'tehtnica', 'enakovredni', 'tehtnica', 'enakovredni', 'tehtnica']
 };
 
+const PIVOT = { x: 512, y: 250 };
+const BEAM_HALF = 230;
+const HANG = 140;              /// razdalja od konca grede do krožnika
+const PLATE_W = 210;
+const MAX_TILT = 12;
+const TRAY_Y = 655;
+const SLICE_GAP = 160;
+const MAX_TRIES = 2;           /// po toliko napakah igra pokaže pravilno rešitev
 const MOUSE_HOME = { x: 60, y: 650 };
 
 const FONT = 'Arial, sans-serif';
 const COLOR_TEXT = '#3b2a14';
 const COLOR_GOOD = '#1b7a1b';
+const COLOR_WARN = '#b34700';
 
 export const BASIC_FRACTIONS: [number, number][] = [[1, 2], [1, 4], [3, 4], [1, 5], [2, 5], [3, 5], [4, 5]];
 export const REDUCIBLE_FRACTIONS: [number, number][] = [[2, 4], [4, 8], [3, 6], [6, 8], [2, 8], [3, 12], [9, 12], [6, 20], [15, 20]];
-export const DEN_FAMILIES: number[][] = [[2, 4, 8], [3, 6, 12], [5, 10], [2, 3, 6], [2, 5, 10]];
 
 /// števila
-
+///Greatest Commond Divider za preverjanje ali se ulomek lahko okrajša in dejansko krajšanje ulomkov
 export const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 
 export function ulomek(num: number, den: number): Num {
@@ -45,10 +53,6 @@ export function mesano(whole: number, num: number, den: number): Num {
 /// decimalno število podamo v tisočinah, npr. 0,25 => 250
 export function decimalno(thousandths: number): Num {
     return { kind: 'decimalno', p: thousandths, q: 1000, whole: 0, num: 0, den: 0 };
-}
-
-export function naravno(n: number): Num {
-    return { kind: 'naravno', p: n, q: 1, whole: 0, num: 0, den: 0 };
 }
 
 export function compare(a: Num, b: Num): number {
@@ -83,7 +87,6 @@ export function inline(n: Num): string {
         case 'ulomek': return `${n.num}/${n.den}`;
         case 'mesano': return `${n.whole} ${n.num}/${n.den}`;
         case 'decimalno': return decimalText(n.p, n.q)!;
-        case 'naravno': return `${n.p}`;
     }
 }
 
@@ -110,14 +113,6 @@ export function conversionSteps(n: Num): string {
     if (n.kind === 'mesano') return `${inline(n)} = ${n.whole} + ${decimalText(n.num, n.den)} = ${decimalText(n.p, n.q)}`;
     if (n.kind === 'ulomek') return [inline(n), ...fractionChain(n.num, n.den)].join(' = ');
     return inline(n);
-}
-
-export function korakov(n: number): string {
-    const mod = n % 100;
-    if (mod === 1) return `${n} korak`;
-    if (mod === 2) return `${n} koraka`;
-    if (mod === 3 || mod === 4) return `${n} korake`;
-    return `${n} korakov`;
 }
 
 export const between = (min: number, max: number) => Phaser.Math.Between(min, max);
@@ -173,8 +168,10 @@ export class SirnaTehtnica extends Scene {
         this.keyHandler = null;
         this.roundKeyHandler = null;
 
+        /// soba (stena shrambe in miza) se nariše s kodo, brez sprite-ov
         this.drawPantry();
 
+        /// miška je edini sprite: assets/Mouse/mouse_topdown_32x32.png (naložen v Preloaderju kot 'mouse')
         this.mouse = this.add.sprite(MOUSE_HOME.x, MOUSE_HOME.y, 'mouse').setScale(2.5).setAngle(180).setDepth(30);
 
         this.hud = this.add.text(16, 12, '', {
@@ -219,6 +216,7 @@ export class SirnaTehtnica extends Scene {
 
     /// ozadje, HUD in sporočila
 
+    /// izris sobe: stena z letvicami in lesena miza spodaj, vse z Phaser Graphics
     drawPantry() {
         const g = this.add.graphics().setDepth(0);
         g.fillStyle(0xf3e3c3, 1);
@@ -316,10 +314,10 @@ export class SirnaTehtnica extends Scene {
         const container = this.createPanel(
             'Sirna tehtnica',
             'Miška stoji pred tehtnico. Na eni strani je ulomek, na drugi strani pa mora biti rezina sira, ki tehta prav toliko.\n\n' +
-            'Z miško povleci pravo rezino sira na tehtnico ali pa sir postavi na pravo mesto na številskem poltraku. ' +
+            'Z miško povleci pravo rezino sira na tehtnico. ' +
             'Če se zmotiš, se tehtnica nagne in dobiš namig.\n\n' +
-            'Težavnost 1: ulomki in decimalna števila, številski poltrak.\n' +
-            'Težavnost 2: enakovredni ulomki, mešana števila, urejanje po velikosti.'
+            'Težavnost 1: ulomki in decimalna števila.\n' +
+            'Težavnost 2: enakovredni ulomki z modelom, mešana števila in ulomki, večji od 1.'
         );
         this.addButton(container, 380, 600, 230, '1  Težavnost 1', () => this.startLevel(1));
         this.addButton(container, 644, 600, 230, '2  Težavnost 2', () => this.startLevel(2));
@@ -372,14 +370,8 @@ export class SirnaTehtnica extends Scene {
             case 'tehtnica':
                 this.roundTehtnica();
                 break;
-            case 'poltrak':
-                this.roundPoltrak();
-                break;
             case 'enakovredni':
                 this.roundEnakovredni();
-                break;
-            case 'urejanje':
-                this.roundUrejanje();
                 break;
         }
     }
@@ -408,29 +400,477 @@ export class SirnaTehtnica extends Scene {
         this.tweens.add({ targets: this.mouse, angle: this.mouse.angle + 12, duration: 70, yoyo: true, repeat: 2 });
     }
 
-    /// krogi (še v izdelavi)
+    /// risanje števil, sira in modelov
+
+    /// ulomek se izpiše z ulomkovo črto, mešano število s celim delom pred ulomkom
+    makeLabel(n: Num, size: number, color: number): Phaser.GameObjects.Container {
+        const css = `#${color.toString(16).padStart(6, '0')}`;
+        const style = { fontSize: `${size}px`, fontFamily: FONT, color: css, fontStyle: 'bold' };
+        const container = this.add.container(0, 0);
+
+        if (n.kind === 'decimalno') {
+            container.add(this.add.text(0, 0, inline(n), { ...style, fontSize: `${Math.round(size * 1.2)}px` }).setOrigin(0.5));
+            return container;
+        }
+
+        const top = this.add.text(0, -2, `${n.num}`, style).setOrigin(0.5, 1);
+        const bottom = this.add.text(0, 2, `${n.den}`, style).setOrigin(0.5, 0);
+        const lineWidth = Math.max(top.width, bottom.width) + 8;
+        const line = this.add.graphics();
+        line.lineStyle(3, color, 1);
+        line.lineBetween(-lineWidth / 2, 0, lineWidth / 2, 0);
+        const fraction = [top, line, bottom];
+
+        if (n.kind === 'mesano') {
+            const whole = this.add.text(0, 0, `${n.whole}`, { ...style, fontSize: `${Math.round(size * 1.4)}px` }).setOrigin(0.5);
+            const total = whole.width + 6 + lineWidth;
+            whole.x = -total / 2 + whole.width / 2;
+            fraction.forEach(obj => { obj.x = total / 2 - lineWidth / 2; });
+            container.add(whole);
+        }
+
+        container.add(fraction);
+        return container;
+    }
+
+    /// model ulomka: pravokotnik, razdeljen na den enakih delov, od katerih je num pobarvanih
+    makeModel(num: number, den: number, width: number): Phaser.GameObjects.Graphics {
+        const g = this.add.graphics();
+        const h = 24;
+        const part = width / den;
+        for (let i = 0; i < den; i++) {
+            g.fillStyle(i < num ? 0xff9f1c : 0xfff3d0, 1);
+            g.fillRect(-width / 2 + i * part, -h / 2, part, h);
+        }
+        g.lineStyle(2, 0x5a3a00, 1);
+        for (let i = 1; i < den; i++) {
+            g.lineBetween(-width / 2 + i * part, -h / 2, -width / 2 + i * part, h / 2);
+        }
+        g.strokeRect(-width / 2, -h / 2, width, h);
+        return g;
+    }
+
+    /// rezina sira z vrednostjo. Pri enakovrednih ulomkih ima skrit model, ki se pokaže na tehtnici
+    /// sir je narisan s kodo: rumen mnogokotnik z luknjami (krogi), na njem je napis števila
+    makeCheese(n: Num, x: number, y: number, withModel: boolean = false): Phaser.GameObjects.Container {
+        const g = this.add.graphics();
+        const points = [
+            new Phaser.Math.Vector2(-65, 48),
+            new Phaser.Math.Vector2(65, 48),
+            new Phaser.Math.Vector2(65, -48),
+            new Phaser.Math.Vector2(-65, -16)
+        ];
+        g.fillStyle(0xffd23f, 1);
+        g.fillPoints(points, true);
+        g.lineStyle(3, 0xc99a00, 1);
+        g.strokePoints(points, true);
+        g.fillStyle(0xe0b020, 1);
+        g.fillCircle(-50, 32, 6);
+        g.fillCircle(52, -32, 6);
+        g.fillCircle(52, 34, 4);
+        g.fillCircle(-30, 0, 3);
+
+        const label = this.makeLabel(n, 24, 0x5a3a00);
+        label.setPosition(6, 12);
+
+        const cheese = this.track(this.add.container(x, y, [g, label]).setDepth(20));
+        cheese.setData('num', n);
+        cheese.setData('home', { x, y });
+        cheese.setData('bottom', 48);
+
+        if (withModel) {
+            const model = this.makeModel(n.num, n.den, 130).setPosition(0, 70).setVisible(false);
+            cheese.add(model);
+            cheese.setData('model', model);
+        }
+        return cheese;
+    }
+
+    /// utež z ulomkom (leva stran tehtnice)
+    makeWeight(n: Num, withModel: boolean = false): Phaser.GameObjects.Container {
+        const g = this.add.graphics();
+        const points = [
+            new Phaser.Math.Vector2(-64, 46),
+            new Phaser.Math.Vector2(64, 46),
+            new Phaser.Math.Vector2(48, -40),
+            new Phaser.Math.Vector2(-48, -40)
+        ];
+        g.fillStyle(0x6d7b8d, 1);
+        g.fillPoints(points, true);
+        g.lineStyle(3, 0x3d4652, 1);
+        g.strokePoints(points, true);
+        g.fillStyle(0x6d7b8d, 1);
+        g.fillCircle(0, -48, 10);
+        g.strokeCircle(0, -48, 10);
+
+        const label = this.makeLabel(n, 26, 0xffffff);
+        label.setPosition(0, 4);
+
+        const weight = this.track(this.add.container(0, 0, [g, label]).setDepth(20));
+        weight.setData('num', n);
+        weight.setData('bottom', 46);
+
+        if (withModel) {
+            const model = this.makeModel(n.num, n.den, 130).setPosition(0, 68);
+            weight.add(model);
+            weight.setData('model', model);
+            weight.setData('bottom', 82);
+        }
+        return weight;
+    }
+
+    trayX(index: number, count: number): number {
+        return 512 + (index - (count - 1) / 2) * SLICE_GAP;
+    }
+
+    /// definiranje mouseDrag poslušalcev: dragstart dvigne objekt, drag ga premika za miško, dragend preveri, kam je spuščen
+    makeDraggable(obj: Phaser.GameObjects.Container, onDrop: (obj: Phaser.GameObjects.Container) => boolean) {
+        obj.setSize(130, 96);
+        obj.setInteractive({ draggable: true, useHandCursor: true });
+
+        obj.on('dragstart', () => {
+            if (this.locked) return;
+            obj.setData('dragging', true);
+            obj.setDepth(50);
+        });
+        obj.on('drag', (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => {
+            if (!obj.getData('dragging')) return;
+            obj.setPosition(dragX, dragY);
+        });
+        obj.on('dragend', () => {
+            if (!obj.getData('dragging')) return;
+            obj.setData('dragging', false);
+            obj.setDepth(20);
+            if (!onDrop(obj)) this.sendHome(obj);
+        });
+    }
+
+    sendHome(obj: Phaser.GameObjects.Container) {
+        if (this.rightItem === obj) this.rightItem = null;
+        (obj.getData('model') as Phaser.GameObjects.Graphics | undefined)?.setVisible(false);
+        obj.setData('bottom', 48);
+        const home = obj.getData('home') as { x: number; y: number };
+        this.tweens.add({ targets: obj, x: home.x, y: home.y, duration: 250, ease: 'Quad.easeOut' });
+    }
+
+    markTried(obj: Phaser.GameObjects.Container) {
+        obj.setAlpha(0.4);
+        obj.setData('used', true);
+        obj.disableInteractive();
+    }
+
+    /// tehtnica
+
+    /// izris tehtnice s kodo: stojalo in podstavek (Graphics), greda (Rectangle) in zlat gumb na vrtišču
+    buildBalance(left: Phaser.GameObjects.Container) {
+        const frame = this.track(this.add.graphics().setDepth(5));
+        frame.fillStyle(0x7a5230, 1);
+        frame.fillRect(PIVOT.x - 9, PIVOT.y, 18, 290);
+        frame.fillStyle(0x5d3d22, 1);
+        frame.fillRoundedRect(PIVOT.x - 110, PIVOT.y + 285, 220, 26, 8);
+
+        this.balanceGfx = this.track(this.add.graphics().setDepth(6));
+        this.beam = this.track(this.add.rectangle(PIVOT.x, PIVOT.y, BEAM_HALF * 2 + 20, 14, 0x8d6e63).setStrokeStyle(2, 0x4e342e).setDepth(7));
+        const knob = this.track(this.add.graphics().setDepth(8));
+        knob.fillStyle(0xffd23f, 1);
+        knob.fillCircle(PIVOT.x, PIVOT.y, 11);
+        knob.lineStyle(2, 0x4e342e, 1);
+        knob.strokeCircle(PIVOT.x, PIVOT.y, 11);
+
+        this.leftItem = left;
+        this.tilt = 0;
+        this.redrawBalance();
+    }
+
+    panEnd(side: -1 | 1): { x: number; y: number } {
+        const rad = Phaser.Math.DegToRad(this.tilt);
+        return {
+            x: PIVOT.x + side * BEAM_HALF * Math.cos(rad),
+            y: PIVOT.y + side * BEAM_HALF * Math.sin(rad)
+        };
+    }
+
+    /// ob vsakem nagibu ponovno nariše vrvice in krožnika ter postavi predmeta na krožnika
+    redrawBalance() {
+        if (!this.beam || !this.balanceGfx) return;
+        this.beam.setAngle(this.tilt);
+
+        const g = this.balanceGfx;
+        g.clear();
+        ([-1, 1] as const).forEach(side => {
+            const end = this.panEnd(side);
+            const plateY = end.y + HANG;
+            g.lineStyle(2, 0x4e342e, 1);
+            g.lineBetween(end.x, end.y, end.x - PLATE_W / 2 + 12, plateY);
+            g.lineBetween(end.x, end.y, end.x + PLATE_W / 2 - 12, plateY);
+            g.fillStyle(0xb0b7c3, 1);
+            g.fillEllipse(end.x, plateY + 6, PLATE_W, 22);
+            g.lineStyle(2, 0x6d7380, 1);
+            g.strokeEllipse(end.x, plateY + 6, PLATE_W, 22);
+
+            const item = side === -1 ? this.leftItem : this.rightItem;
+            item?.setPosition(end.x, plateY - (item.getData('bottom') as number));
+        });
+    }
+
+    /// desna stran se spusti, če je težja (pozitiven kot zavrti v smeri urinega kazalca)
+    tiltFor(left: Num, right: Num): number {
+        const diff = right.p / right.q - left.p / left.q;
+        if (compare(left, right) === 0) return 0;
+        return Math.sign(diff) * Math.min(MAX_TILT, 5 + Math.abs(diff) * 10);
+    }
+
+    tiltTo(angle: number) {
+        this.tweens.add({
+            targets: this,
+            tilt: angle,
+            duration: 650,
+            ease: 'Back.easeOut',
+            onUpdate: () => this.redrawBalance()
+        });
+    }
+
+    isOverRightPlate(obj: Phaser.GameObjects.Container): boolean {
+        const end = this.panEnd(1);
+        return Phaser.Math.Distance.Between(obj.x, obj.y, end.x, end.y + HANG - 50) < 140;
+    }
+
+    placeOnPan(obj: Phaser.GameObjects.Container) {
+        this.rightItem = obj;
+        const model = obj.getData('model') as Phaser.GameObjects.Graphics | undefined;
+        if (model) {
+            model.setVisible(true);
+            obj.setData('bottom', 82);
+        }
+        obj.setDepth(20);
+        this.redrawBalance();
+    }
+
+    /// skupni del za "tehtnica" in "enakovredni": rezine na mizi, ki se vlečejo na desni krožnik
+    setupSlices(options: Num[], withModels: boolean, evaluate: (slice: Phaser.GameObjects.Container) => void): Phaser.GameObjects.Container[] {
+        const slices = options.map((n, i) => {
+            const slice = this.makeCheese(n, this.trayX(i, options.length), TRAY_Y, withModels);
+            this.track(this.add.text(slice.x - 58, TRAY_Y - 44, `${i + 1}`, {
+                fontSize: '16px',
+                fontFamily: FONT,
+                color: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 3
+            }).setDepth(19));
+            return slice;
+        });
+
+        const drop = (slice: Phaser.GameObjects.Container) => {
+            if (this.rightItem || !this.isOverRightPlate(slice)) return false;
+            this.placeOnPan(slice);
+            evaluate(slice);
+            return true;
+        };
+        slices.forEach(slice => this.makeDraggable(slice, drop));
+
+        /// tipke 1-5 položijo rezino na tehtnico brez vlečenja
+        this.roundKeyHandler = event => {
+            const slice = slices[Number(event.key) - 1];
+            if (!slice || this.locked || this.rightItem || slice.getData('used')) return;
+            this.placeOnPan(slice);
+            evaluate(slice);
+        };
+        return slices;
+    }
+
+    /// krog: tehtnica (ulomek = decimalno število)
+
+    targetForTehtnica(): Num {
+        const r = between(0, 9);
+        if (this.level === 1) {
+            if (r <= 4) {
+                const [num, den] = pick(BASIC_FRACTIONS);
+                return ulomek(num, den);
+            }
+            if (r <= 7) return ulomek(between(1, 9), 10);
+            if (r === 8) {
+                let k = between(1, 99);
+                while (k % 10 === 0) k = between(1, 99);
+                return ulomek(k, 100);
+            }
+            const den = pick([2, 4, 5, 10]);
+            return ulomek(den, den); /// celota
+        }
+
+        if (r <= 2) {
+            const [num, den] = pick([...BASIC_FRACTIONS, [between(1, 9), 10]]);
+            return mesano(between(1, 3), num, den);
+        }
+        if (r <= 4) {
+            const den = pick([2, 4, 5, 10]);
+            let num = between(den + 1, 3 * den - 1);
+            while (num % den === 0) num = between(den + 1, 3 * den - 1);
+            return ulomek(num, den);
+        }
+        if (r <= 6) {
+            const [num, den] = pick(REDUCIBLE_FRACTIONS);
+            return ulomek(num, den);
+        }
+        if (r <= 8) {
+            let k = between(1, 999);
+            while (k % 10 === 0) k = between(1, 999);
+            return ulomek(k, 1000);
+        }
+        let k = between(101, 299);
+        while (k % 10 === 0) k = between(101, 299);
+        return ulomek(k, 100);
+    }
+
+    decimalDistractors(target: Num, count: number): Num[] {
+        const correct = thousandthsOf(target);
+        const typical: (number | null)[] = [];
+
+        if (target.kind === 'mesano') {
+            typical.push(
+                parseDecimal(`${target.whole},${target.num}${target.den}`),
+                parseDecimal(`${target.whole},${target.den}`),
+                parseDecimal(`${target.whole},${target.num}`),
+                parseDecimal(`${target.num},${target.den}`)
+            );
+        } else {
+            typical.push(
+                parseDecimal(`${target.num},${target.den}`), /// ulomkova črta kot vejica: 1/4 => 1,4
+                parseDecimal(`0,${target.num}${target.den}`), /// 1/4 => 0,14
+                parseDecimal(`0,${target.den}`), /// 1/4 => 0,4
+                parseDecimal(`0,${target.num}`) /// 3/100 => 0,3
+            );
+        }
+
+        const near = [correct + 100, correct - 100, correct + 10, correct - 10, correct + 1000, correct - 1000, correct + 250];
+        const seen = new Set<number>([correct]);
+        const result: number[] = [];
+        [...shuffle(typical), ...shuffle(near)].forEach(value => {
+            if (value === null || value <= 0 || value > 9999 || seen.has(value) || result.length >= count) return;
+            seen.add(value);
+            result.push(value);
+        });
+        return result.map(decimalno);
+    }
+
+    hintTehtnica(target: Num): string {
+        if (target.kind === 'mesano') return 'Celi del napišeš pred decimalno vejico, ulomek pa razširiš na imenovalec 10, 100 ali 1000.';
+
+        const parts: string[] = [];
+        if (target.num > target.den) parts.push('Ulomek je večji od 1, zato rezina tehta več kot 1.');
+        if ([10, 100, 1000].includes(target.den)) parts.push('Imenovalec 10 pomeni desetine (1 decimalka), 100 stotine (2 decimalki), 1000 tisočine (3 decimalke).');
+        else if (gcd(target.num, target.den) > 1) parts.push('Ulomek najprej okrajšaj, nato ga razširi na imenovalec 10, 100 ali 1000.');
+        else parts.push('Ulomek razširi tako, da bo imenovalec 10, 100 ali 1000.');
+        return parts.join(' ');
+    }
 
     roundTehtnica() {
-        this.placeholderRound('Tehtnica: ulomek = decimalno število');
+        const target = this.targetForTehtnica();
+        const correct = decimalno(thousandthsOf(target));
+        const options = shuffle([correct, ...this.decimalDistractors(target, this.level === 1 ? 3 : 4)]);
+
+        this.instruction.setText('Katera rezina sira tehta toliko kot ulomek? Povleci jo na desni krožnik.');
+        this.setMessage('Namig: tehtnica se nagne na težjo stran. Lahko pritisneš tudi tipke 1–' + options.length + '.');
+        this.buildBalance(this.makeWeight(target));
+
+        const slices = this.setupSlices(options, false, slice => {
+            this.locked = true;
+            const value = slice.getData('num') as Num;
+            this.tiltTo(this.tiltFor(target, value));
+
+            if (compare(value, target) === 0) {
+                this.time.delayedCall(700, () => this.success(`${conversionSteps(target)} – tehtnica je v ravnovesju.`));
+                return;
+            }
+
+            this.registerMistake();
+            let text = `Rezina ${inline(value)} je ${compare(value, target) > 0 ? 'težja' : 'lažja'} od ${inline(target)}.`;
+            if (target.kind === 'ulomek' && parseDecimal(`${target.num},${target.den}`) === thousandthsOf(value)) text += ' Ulomkova črta ni decimalna vejica!';
+
+            this.time.delayedCall(700, () => {
+                if (this.tries >= MAX_TRIES) {
+                    this.setMessage(`${text}\nPravilno je: ${conversionSteps(target)}.`, COLOR_WARN);
+                    this.time.delayedCall(900, () => {
+                        this.markTried(slice);
+                        this.sendHome(slice);
+                        const right = slices.find(s => compare(s.getData('num') as Num, target) === 0)!;
+                        this.placeOnPan(right);
+                        this.tiltTo(0);
+                        this.showNext();
+                    });
+                    return;
+                }
+                this.setMessage(`${text}\nNamig: ${this.hintTehtnica(target)}`, COLOR_WARN);
+                this.time.delayedCall(800, () => {
+                    this.markTried(slice);
+                    this.sendHome(slice);
+                    this.tiltTo(0);
+                    this.locked = false;
+                });
+            });
+        });
     }
 
-    roundPoltrak() {
-        this.placeholderRound('Številski poltrak');
-    }
+    /// krog: enakovredni ulomki (z modelom)
 
     roundEnakovredni() {
-        this.placeholderRound('Enakovredni ulomki z modelom');
-    }
+        const den = pick([2, 3, 4, 5, 6]);
+        const k = pick([2, 3, 4].filter(f => den * f <= 12));
+        const num = between(1, den - 1);
+        const target = ulomek(num, den);
+        const correct = ulomek(num * k, den * k);
 
-    roundUrejanje() {
-        this.placeholderRound('Urejanje po velikosti');
-    }
+        const candidates: [number, number][] = [
+            [num + k, den + k], [num + 1, den + 1], [num, den * k], [num * k, den],
+            [num * k + 1, den * k], [num * k - 1, den * k], [num * k, den * k + 1], [num * k, den * k - 1]
+        ];
+        const distractors: Num[] = [];
+        shuffle(candidates).forEach(([n, d]) => {
+            if (distractors.length >= 3 || n < 1 || n > d || d > 12) return;
+            const option = ulomek(n, d);
+            if (compare(option, target) === 0 || distractors.some(o => compare(o, option) === 0)) return;
+            distractors.push(option);
+        });
 
-    /// začasno krog samo pokaže ime in gumb Naprej, da lahko preizkusimo potek igre
-    placeholderRound(name: string) {
-        this.instruction.setText(name);
-        this.setMessage('Ta krog še ni narejen.');
-        this.showNext();
+        this.instruction.setText('Kateri ulomek je enakovreden ulomku na uteži? Povleci rezino na tehtnico.');
+        this.setMessage('Na tehtnici se pokaže model ulomka. Enakovredna ulomka imata enako velik pobarvan del.');
+        this.buildBalance(this.makeWeight(target, true));
+
+        const slices = this.setupSlices(shuffle([correct, ...distractors]), true, slice => {
+            this.locked = true;
+            const value = slice.getData('num') as Num;
+            this.tiltTo(this.tiltFor(target, value));
+
+            const explanation = `${num}/${den} = ${num}·${k}/${den}·${k} = ${num * k}/${den * k}`;
+            if (compare(value, target) === 0) {
+                this.time.delayedCall(700, () => this.success(
+                    `${explanation}. Števec in imenovalec sta pomnožena z istim številom, pobarvani del je enako velik.`
+                ));
+                return;
+            }
+
+            this.registerMistake();
+            const text = `${inline(value)} ni enakovreden ${inline(target)} - pobarvana dela nista enako velika.`;
+            this.time.delayedCall(900, () => {
+                if (this.tries >= MAX_TRIES) {
+                    this.setMessage(`${text}\nPravilno je: ${explanation}.`, COLOR_WARN);
+                    this.time.delayedCall(1200, () => {
+                        this.markTried(slice);
+                        this.sendHome(slice);
+                        this.placeOnPan(slices.find(s => compare(s.getData('num') as Num, target) === 0)!);
+                        this.tiltTo(0);
+                        this.showNext();
+                    });
+                    return;
+                }
+                this.setMessage(`${text}\nNamig: števec in imenovalec pomnoži z istim številom.`, COLOR_WARN);
+                this.time.delayedCall(1200, () => {
+                    this.markTried(slice);
+                    this.sendHome(slice);
+                    this.tiltTo(0);
+                    this.locked = false;
+                });
+            });
+        });
     }
 
     /// konec igre
