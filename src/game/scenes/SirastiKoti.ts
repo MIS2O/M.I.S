@@ -629,6 +629,7 @@ export class SirastiKoti extends Scene {
     /** Edino mesto, kjer igra zapusti sceno – tu se poveže z glavno igro. */
     returnToMainGame() {
         this.closePanel();
-        this.scene.start('Game');
+        // nazaj v sobo z mišjo luknjo, miška stoji pred luknjo (9,5) in gleda navzdol
+        this.scene.start('Game', { roomKey: 'SobaSirastiKoti', spawnX: 9, spawnY: 6, angle: 0 });
     }
 }
