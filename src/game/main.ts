@@ -6,6 +6,7 @@ import { AUTO, Game } from 'phaser';
 import { Preloader } from './scenes/Preloader';
 import { SkrivnePretvorbe } from './scenes/SkrivnePretvorbe';
 import { SirastiKoti } from './scenes/SirastiKoti';
+import { SirnaTehtnica } from './scenes/SirnaTehtnica';
 
 //  Find out more information about the Game Config at:
 //  https://docs.phaser.io/api-documentation/typedef/types-core#gameconfig
@@ -31,7 +32,8 @@ const config: Phaser.Types.Core.GameConfig = {
         MainGame,
         GameOver,
         SkrivnePretvorbe,
-        SirastiKoti
+        SirastiKoti,
+        SirnaTehtnica
     ]
 };
 
