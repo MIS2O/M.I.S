@@ -1,0 +1,45 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+env:
+  IMAGE: mis-game:latest
+  CONTAINER: mis-game
+  TUNNEL_NETWORK: tunnel
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, rups]
+    steps:
+      - name: Checkout latest code
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Build fresh image (no cache)
+        run: docker build --no-cache --pull -t "$IMAGE" .
+
+      - name: Replace container
+        run: |
+          docker rm -f "$CONTAINER" 2>/dev/null || true
+          docker run -d \
+            --name "$CONTAINER" \
+            --network "$TUNNEL_NETWORK" \
+            -p 8080:80 \
+            --restart unless-stopped \
+            "$IMAGE"
+
+      - name: Health check
+        run: |
+          sleep 3
+          curl -fsS -o /dev/null http://localhost:8080 && echo "mis-game is up"
+
+      - name: Remove dangling images
+        run: docker image prune -f
