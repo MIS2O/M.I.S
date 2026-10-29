@@ -1,3 +1,4 @@
+import * as Phaser from 'phaser';
 import { Scene } from 'phaser';
 
 interface RoomExit {
@@ -13,16 +14,35 @@ const ROOMS: Record<string, { exits: RoomExit[] }> = {
     'Start_Room': {
         exits: [
             // Levi izhod
-            { x: 0, targetRoom: 'Feri_Logo_Room', spawnX: 13, spawnY: 10, lookAngle: 90 },
+            { x: 0, targetRoom: 'SobaSkrivnePretvorbe', spawnX: 13, spawnY: 10, lookAngle: 90 },
             // Desni izhod
-            //{ x: 14, targetRoom: 'Unassigned_Room', spawnX: 13, spawnY: 10, lookAngle: 90 },
-            // Zgornji izhod
-            //{ y: 0, targetRoom: 'Unassigned_Room', spawnX: 13, spawnY: 10, lookAngle: 90 }
+            { x: 14, targetRoom: 'SobaSirastiKoti', spawnX: 6, spawnY: 9, lookAngle: -90 },
+            // Zgornji izhod -> v Hodnik1
+            { y: 0, targetRoom: 'Hodnik1', spawnX: 9, spawnY: 13, lookAngle: 180 }
         ]
     },
-    'Feri_Logo_Room': {
+    'SobaSkrivnePretvorbe': {
         exits: [
             { x: 14, targetRoom: 'Start_Room', spawnX: 1, spawnY: 7, lookAngle: -90 }
+        ]
+    },
+    'SobaSirastiKoti': {
+        exits: [
+            { x: 5, targetRoom: 'Start_Room', spawnX: 13, spawnY: 7, lookAngle: 90 }
+        ]
+    },
+    'Hodnik1': {
+        exits: [
+            // Spodnji izhod -> nazaj v Start_Room
+            { y: 14, targetRoom: 'Start_Room', spawnX: 6, spawnY: 1, lookAngle: 0 },
+            // Zgornji izhod -> naprej v SobaKrizisce
+            { y: 1, targetRoom: 'SobaKrizisce', spawnX: 7, spawnY: 10, lookAngle: 180 }
+        ]
+    },
+    'SobaKrizisce': {
+        exits: [
+            // Spodnji izhod -> nazaj v Hodnik1
+            { y: 11, targetRoom: 'Hodnik1', spawnX: 9, spawnY: 2, lookAngle: 0 }
         ]
     }
 };
@@ -35,6 +55,7 @@ export class Game extends Scene {
         S: Phaser.Input.Keyboard.Key;
         D: Phaser.Input.Keyboard.Key;
     };
+    spaceKey!: Phaser.Input.Keyboard.Key;
 
     map: Phaser.Tilemaps.Tilemap;
     collidableLayers: (Phaser.Tilemaps.TilemapLayer | Phaser.Tilemaps.TilemapGPULayer | null)[] = [];
@@ -138,6 +159,7 @@ export class Game extends Scene {
 
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.wasd = this.input.keyboard!.addKeys('W,A,S,D') as any;
+        this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
         // transition FADE IN
         this.cameras.main.fadeIn(150, 0, 0, 0);
@@ -191,9 +213,44 @@ export class Game extends Scene {
         return false;
     }
 
+    enterMouseHole(holeTileX: number, holeTileY: number, targetScene: string) {
+        this.isMoving = true;
+        this.player.setAngle(180);
+
+        const targetX = this.offsetX + (holeTileX + 0.5) * this.tileSizeOnScreen;
+        const targetY = this.offsetY + (holeTileY + 0.5) * this.tileSizeOnScreen;
+
+        this.tweens.add({
+            targets: this.player,
+            x: targetX,
+            y: targetY,
+            scaleX: 0.15,
+            scaleY: 0.15,
+            alpha: 0,
+            duration: 1000,
+            ease: 'Quad.easeIn',
+            onComplete: () => {
+                this.cameras.main.fadeOut(200, 0, 0, 0);
+                this.cameras.main.once('camerafadeoutcomplete', () => {
+                    this.scene.start(targetScene);
+                });
+            }
+        });
+    }
+
     update() {
         if (this.isMoving) {
             return;
+        }
+        if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+            if (this.currentRoom === 'SobaSkrivnePretvorbe' && this.tileX === 12 && this.tileY === 6 && !this.isMoving) {
+                this.enterMouseHole(12, 5, 'SkrivnePretvorbe');
+                return;
+            }
+            if (this.currentRoom === 'SobaSirastiKoti' && this.tileX === 9 && this.tileY === 6 && !this.isMoving) {
+                this.enterMouseHole(9, 5, 'SirastiKoti');
+                return;
+            }
         }
 
         const left = this.cursors.left.isDown || this.wasd.A.isDown;
