@@ -797,7 +797,7 @@ export class SirnaTehtnica extends Scene {
         const options = shuffle([correct, ...this.decimalDistractors(target, this.level === 1 ? 3 : 4)]);
 
         this.instruction.setText('Katera rezina sira tehta toliko kot ulomek? Povleci jo na desni krožnik.');
-        this.setMessage('Namig: tehtnica se nagne na težjo stran. Lahko pritisneš tudi tipke 1–' + options.length + '.');
+        this.setMessage('Namig: tehtnica se nagne na težjo stran. Lahko pritisneš tudi tipke 1 - ' + options.length + '.');
         this.buildBalance(this.makeWeight(target));
 
         const slices = this.setupSlices(options, false, slice => {
@@ -1210,6 +1210,6 @@ export class SirnaTehtnica extends Scene {
 
     returnToMainGame() {
         this.closePanel();
-        this.scene.start('Game');
+        this.scene.start('Game', { roomKey: 'Hodnik1', spawnX: 7, spawnY: 6, angle: -90 });
     }
 }

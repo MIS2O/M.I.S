@@ -157,6 +157,15 @@ export class Game extends Scene {
         midTopDecoLayer?.setDepth(12);
         topDecoLayer?.setDepth(13);
 
+        // Luknja v Hodnik1 je zarotiran tile brez obrobe -> dorisi 1px crno crto stene (samo v tej sobi)
+        if (this.currentRoom === 'Hodnik1') {
+            this.add.rectangle(
+                this.offsetX + 6 * this.tileSizeOnScreen,
+                this.offsetY + 6 * this.tileSizeOnScreen,
+                scale, this.tileSizeOnScreen, 0x383838
+            ).setOrigin(0, 0).setDepth(0.5);
+        }
+
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.wasd = this.input.keyboard!.addKeys('W,A,S,D') as any;
         this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
@@ -213,9 +222,9 @@ export class Game extends Scene {
         return false;
     }
 
-    enterMouseHole(holeTileX: number, holeTileY: number, targetScene: string) {
+    enterMouseHole(holeTileX: number, holeTileY: number, targetScene: string, lookAngle: number = 180) {
         this.isMoving = true;
-        this.player.setAngle(180);
+        this.player.setAngle(lookAngle);
 
         const targetX = this.offsetX + (holeTileX + 0.5) * this.tileSizeOnScreen;
         const targetY = this.offsetY + (holeTileY + 0.5) * this.tileSizeOnScreen;
@@ -249,6 +258,11 @@ export class Game extends Scene {
             }
             if (this.currentRoom === 'SobaSirastiKoti' && this.tileX === 9 && this.tileY === 6 && !this.isMoving) {
                 this.enterMouseHole(9, 5, 'SirastiKoti');
+                return;
+            }
+            /// SirnaTehtnica luknja za kavčem v hodniku ko grepš gor
+            if (this.currentRoom === 'Hodnik1' && this.tileX === 7 && this.tileY === 6 && !this.isMoving) {
+                this.enterMouseHole(6, 6, 'SirnaTehtnica', 90);
                 return;
             }
         }
